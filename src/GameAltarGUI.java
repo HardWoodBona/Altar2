@@ -2,17 +2,21 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
 import javax.swing.event.*;
+import java.util.*;
+import java.util.function.Predicate;
+import java.util.stream.Collectors;
 import java.math.RoundingMode;
 import java.text.DecimalFormat;
 
-public class GameAltarGUI implements FocusListener {
+public class GameAltarGUI {
 
     private final JFrame frame;
     private final JToggleButton[] btnsDragonSouls;
     private final JToggleButton[] btns48Souls;
     private final JToggleButton[] btns8Souls;
-    private final JTextField percentageReductionField;
+    private final JTextField dragonTimeField;
     private final JTextField eightHourTimeField;
+    private final JLabel lblResults;
 
     public GameAltarGUI() {
         frame = new JFrame("Game Altar");
@@ -29,21 +33,15 @@ public class GameAltarGUI implements FocusListener {
         c.gridy = 2;
         btns8Souls = createButtons("8-hour Souls", 9, 2, c);
         c.gridy = 3;
-        percentageReductionField = createTextField("Time Reduction Percentage:", c);
+        dragonTimeField = createTextField("Dragon soul time (minutes):", c);
         c.gridy = 4;
         eightHourTimeField = createTextField("8-hour soul time (minutes):", c);
-
-        JButton calculateButton = new JButton("Calculate");
-        calculateButton.addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                calculateAndDisplayResults();
-            }
-        });
-
-        // frame.add(Box.createRigidArea(new Dimension(0, 10)));  // Add some spacing
         c.gridy = 5;
-        frame.add(calculateButton, c);
+        lblResults = new JLabel("<html><center>Select an option<br>to begin...</center></html>");
+        frame.add(lblResults, c);
+
+        // c.gridy = 5;
+        // frame.add(calculateButton, c);
 
         frame.pack();
         frame.setLocationRelativeTo(null);
@@ -108,6 +106,8 @@ public class GameAltarGUI implements FocusListener {
             buttons[index].setOpaque(true);
             buttons[index].setBackground(Color.green);
         }
+
+        updateTotal();
     }
 
     private JTextField createTextField(String label, GridBagConstraints gb) {
@@ -115,95 +115,53 @@ public class GameAltarGUI implements FocusListener {
         JLabel labelComponent = new JLabel(label);
         JTextField textField = new JTextField();
         textField.setPreferredSize(new Dimension(50, 20));  // Set a preferred size
-        textField.getDocument().putProperty("owner", textField); //set the owner
-        textField.addFocusListener(this);
 
         textField.getDocument().addDocumentListener(new DocumentListener() {
             public void changedUpdate(DocumentEvent e) {
-                textChanged(e);
+                updateTotal();
             }
             public void removeUpdate(DocumentEvent e) {
-                textChanged(e);
+                updateTotal();
             }
             public void insertUpdate(DocumentEvent e) {
-                textChanged(e);
+                updateTotal();
             }
         });
 
         panel.add(labelComponent);
         panel.add(textField);
         frame.add(panel, gb);
+
         return textField;
     }
 
-    private Object modifiedField;
+    private void updateTotal() {
+        double total = 0;
 
-    public void focusGained(FocusEvent e) {
-        modifiedField = e.getComponent();
-    }
-    
-    public void focusLost(FocusEvent e) {}
+        int dragonTime = 0;
+        try { dragonTime = Integer.parseInt(dragonTimeField.getText()); } catch(Exception e) {}
+        int dragonCount = Integer.parseInt(Arrays.stream(btnsDragonSouls)
+            .reduce((result, but) -> but.isSelected() ? but : result)
+            .orElse(new JToggleButton("0")).getText());
+        total += dragonCount * dragonTime;
 
-    private void textChanged(DocumentEvent e) {
-        Object owner = e.getDocument().getProperty("owner");
+        int eightHourTime = 0;
+        try { eightHourTime = Integer.parseInt(eightHourTimeField.getText()); } catch(Exception e) {}
+        int eightHourCount = Integer.parseInt(Arrays.stream(btns8Souls)
+            .reduce((result, but) -> but.isSelected() ? but : result)
+            .orElse(new JToggleButton("0")).getText());
+        total += eightHourTime * eightHourCount;
 
-        if (modifiedField == null) {
-            modifiedField = owner;
-        }
+        int fortyEightHourTime = Integer.parseInt(Arrays.stream(btns48Souls)
+            .reduce((result, but) -> but.isSelected() ? but : result)
+            .orElse(new JToggleButton("0")).getText());
+        total += fortyEightHourTime * 48 * 60;
 
-        // ignoreNextTextEvent = true;
+        int days = (int) (total / 24 / 60);
+        int hours = (int) (total / 24 % 24);
 
-        DecimalFormat df = new DecimalFormat("0.00");
-        df.setRoundingMode(RoundingMode.DOWN);
-
-        if (owner == percentageReductionField && modifiedField == percentageReductionField) {
-            modifiedField = owner;
-            eightHourTimeField.setText("test");
-        System.out.println("percent");
-        } else if (owner == eightHourTimeField && modifiedField == eightHourTimeField) {
-            modifiedField = owner;
-            try {
-                double eightHourTime = Double.parseDouble(eightHourTimeField.getText());
-                double percentageEquivalent = (1 - eightHourTime / 480) * 100;
-                String result = df.format(percentageEquivalent);
-                System.out.println(eightHourTime / 480);
-                percentageReductionField.setText(result);
-            System.out.println("eight");
-            } catch (Exception ex) {
-                return;
-            }
-        }
-    }
-
-    private void calculateAndDisplayResults() {
-        try {
-            // Calculate total hours based on user input
-            int total48Hours = calculateButtonTotal(btns48Souls, 48, false);
-            int totalDragonHours = calculateButtonTotal(btnsDragonSouls, 48, true);
-            int total8Hours = calculateButtonTotal(btns8Souls, 8, true);
-
-            int reducedHours = total48Hours + total8Hours + totalDragonHours;
-
-            int days = (int) (reducedHours / 24);
-            int hours = (int) (reducedHours % 24);
-
-            showResults(reducedHours, days, hours);
-        } catch (NumberFormatException ex) {
-            showErrorMessage("Please enter a valid number for percentage reduction.");
-        }
-    }
-
-    private int calculateButtonTotal(JToggleButton[] buttons, int duration, boolean applyReduction) {
-        double percentageReduction = Double.parseDouble(percentageReductionField.getText());
-        int total = 0;
-        for (JToggleButton button : buttons) {
-            if (button.isSelected()) {
-                // Parse the button label to get the value
-                int value = Integer.parseInt(button.getText());
-                total += value * duration * (1 - percentageReduction / 100);
-            }
-        }
-        return total;
+        lblResults.setText("<html><center>Minutes needed: " + total +
+            "<br>Days and Hours Before Event: " + days + " days, " + hours + " hours</center></html>");
     }
 
     private void resetButtons(JToggleButton[] buttons) {
